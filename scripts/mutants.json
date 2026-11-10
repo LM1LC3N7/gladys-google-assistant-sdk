@@ -1,0 +1,290 @@
+[
+  {
+    "name": "refresh: refusal check removed",
+    "file": "src/app.js",
+    "from": "    if (refused) throw notSent(refused === 'grant' ? T.refusedGrant : T.refusedClient);\n    const paused = this.pausedFor(mono);\n    if (paused) throw notSent(T.paused(paused));\n    if (!this.refreshing",
+    "to": "    const paused = this.pausedFor(mono);\n    if (paused) throw notSent(T.paused(paused));\n    if (!this.refreshing"
+  },
+  {
+    "name": "refresh: pause check removed",
+    "file": "src/app.js",
+    "from": "    if (paused) throw notSent(T.paused(paused));\n    if (!this.refreshing",
+    "to": "    if (!this.refreshing"
+  },
+  {
+    "name": "blocker: refusal check removed",
+    "file": "src/app.js",
+    "from": "    if (refused) return refused === 'grant' ? T.refusedGrant : T.refusedClient;",
+    "to": ""
+  },
+  {
+    "name": "blocker: pause check removed",
+    "file": "src/app.js",
+    "from": "    if (paused) return T.paused(paused);\n    return undefined;",
+    "to": "    return undefined;"
+  },
+  {
+    "name": "token backoff removed",
+    "file": "src/app.js",
+    "from": "if (!this.refreshing && mono < this.tokenRetry.at)",
+    "to": "if (false)"
+  },
+  {
+    "name": "token backoff not doubled",
+    "file": "src/app.js",
+    "from": "Math.max(5_000, this.tokenRetry.wait * 2)",
+    "to": "5_000"
+  },
+  {
+    "name": "UNAUTHENTICATED: retried on a fresh token too",
+    "file": "src/app.js",
+    "from": "if (!auth.fresh && attempt === 0) {",
+    "to": "if (attempt < 3) {"
+  },
+  {
+    "name": "UNAUTHENTICATED: cached token kept for the retry",
+    "file": "src/app.js",
+    "from": "            // The cached token expired or was revoked early: renewed once.\n            this.access = undefined;",
+    "to": "            // The cached token expired or was revoked early: renewed once."
+  },
+  {
+    "name": "403 taken for a refusal",
+    "file": "src/oauth.js",
+    "from": "if ((status === 400 || status === 401) && reason === 'invalid_grant') {",
+    "to": "if (status === 403 || reason === 'invalid_grant') {"
+  },
+  {
+    "name": "unreadable answer taken for a refusal",
+    "file": "src/oauth.js",
+    "from": "    throw new TokenError(`Google answered HTTP ${status}`, 'answer', { status, reason });",
+    "to": "    throw new TokenError('refused', 'grant', { status, reason });"
+  },
+  {
+    "name": "5xx of the token endpoint not a pause",
+    "file": "src/oauth.js",
+    "from": "if (status === 429 || status >= 500) {",
+    "to": "if (status === 429) {"
+  },
+  {
+    "name": "Retry-After ignored",
+    "file": "src/app.js",
+    "from": "Math.max(doubled, retryAfter ?? 0)",
+    "to": "doubled"
+  },
+  {
+    "name": "pause not doubled",
+    "file": "src/app.js",
+    "from": "TIMINGS.pauseMin * 2 ** level",
+    "to": "TIMINGS.pauseMin"
+  },
+  {
+    "name": "window off by one",
+    "file": "src/app.js",
+    "from": "return this.sentAt.length >= LIMITS.windowCount;",
+    "to": "return this.sentAt.length > LIMITS.windowCount;"
+  },
+  {
+    "name": "window not checked before the token",
+    "file": "src/app.js",
+    "from": "    if (this.windowFull(this.monotonic())) throw notSent(T.tooMany);\n",
+    "to": ""
+  },
+  {
+    "name": "minimum gap removed",
+    "file": "src/app.js",
+    "from": "const wait = this.lastSent + TIMINGS.minGap - mono;",
+    "to": "const wait = this.lastSent - mono;"
+  },
+  {
+    "name": "queue bound off by one",
+    "file": "src/app.js",
+    "from": "if (this.queue.length >= LIMITS.queue)",
+    "to": "if (this.queue.length > LIMITS.queue)"
+  },
+  {
+    "name": "budget check removed",
+    "file": "src/app.js",
+    "from": "    if (left < TIMINGS.minStart) throw notSent(T.tooLate);\n    return left;",
+    "to": "    return left;"
+  },
+  {
+    "name": "token renewal not bounded by the budget",
+    "file": "src/app.js",
+    "from": "            left - TIMINGS.minStart,",
+    "to": "            left + 60_000,"
+  },
+  {
+    "name": "quota said sent",
+    "file": "src/assistant.js",
+    "from": "const NOT_EXECUTED = new Set([3, 5, 7, 8, 9, 12, 16]);",
+    "to": "const NOT_EXECUTED = new Set([3, 5, 7, 9, 12, 16]);"
+  },
+  {
+    "name": "HTTP status not checked",
+    "file": "src/assistant.js",
+    "from": "          if (status !== 200) {",
+    "to": "          if (false) {"
+  },
+  {
+    "name": "content type not checked",
+    "file": "src/assistant.js",
+    "from": "if (!type.startsWith('application/grpc')) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "compressed frame accepted",
+    "file": "src/assistant.js",
+    "from": "if (pending[0] !== 0) throw new Error('compressed frame');",
+    "to": ""
+  },
+  {
+    "name": "frame bound removed",
+    "file": "src/assistant.js",
+    "from": "if (length > LIMITS.frameBytes) throw new Error('frame too large');",
+    "to": ""
+  },
+  {
+    "name": "answer bound removed",
+    "file": "src/assistant.js",
+    "from": "if (received > LIMITS.answerBytes) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "state not checked",
+    "file": "src/app.js",
+    "from": "(s) => s.expires > mono && sameState(s.state, state)",
+    "to": "(s) => s.expires > mono"
+  },
+  {
+    "name": "state expiry not checked",
+    "file": "src/app.js",
+    "from": "(s) => s.expires > mono && sameState(s.state, state)",
+    "to": "(s) => sameState(s.state, state)"
+  },
+  {
+    "name": "state reusable",
+    "file": "src/app.js",
+    "from": "const [entry] = this.states.splice(index, 1);",
+    "to": "const entry = this.states[index];"
+  },
+  {
+    "name": "redirect not compared",
+    "file": "src/app.js",
+    "from": "if (redirectUri !== entry.redirectUri) throw new UserError(T.badRedirect);",
+    "to": ""
+  },
+  {
+    "name": "scope not checked",
+    "file": "src/app.js",
+    "from": "if (answer.scope !== undefined && !grantsAssistant(answer.scope)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "refused code taken for a refusal",
+    "file": "src/app.js",
+    "from": "if (err instanceof TokenError && err.kind === 'grant') throw new UserError(T.codeRefused);",
+    "to": ""
+  },
+  {
+    "name": "refusal not cleared by a renewal",
+    "file": "src/app.js",
+    "from": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.clearRefusal();\n    this.clearPause();\n    this.problem = undefined;\n    if (typeof",
+    "to": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.clearPause();\n    this.problem = undefined;\n    if (typeof"
+  },
+  {
+    "name": "unreadable /data overwritten",
+    "file": "src/app.js",
+    "from": "if (this.storeState === 'unreadable' || this.storeState === undefined) {",
+    "to": "if (this.storeState === undefined) {"
+  },
+  {
+    "name": "fingerprint not truncated",
+    "file": "src/store.js",
+    "from": "    .slice(0, HEX_DIGITS);",
+    "to": "    ;"
+  },
+  {
+    "name": "far pause from /data accepted",
+    "file": "src/store.js",
+    "from": "pause.until > now && pause.until - now <= TIMINGS.pauseMax",
+    "to": "pause.until > now"
+  },
+  {
+    "name": "message length not checked",
+    "file": "src/text.js",
+    "from": "if ([...text].length > max) return { error: 'long' };",
+    "to": ""
+  },
+  {
+    "name": "controls kept in the message",
+    "file": "src/text.js",
+    "from": "const text = String(value).replace(CONTROLS, ' ').replace(/\\s+/g, ' ').trim();",
+    "to": "const text = String(value).trim();"
+  },
+  {
+    "name": "renewal margin removed",
+    "file": "src/app.js",
+    "from": "mono < this.access.expires - TIMINGS.refreshMargin,",
+    "to": "mono < this.access.expires,"
+  },
+  {
+    "name": "renewal not single-flight",
+    "file": "src/app.js",
+    "from": "this.refreshing ??= this.refresh(c, key)",
+    "to": "this.refreshing = this.refresh(c, key)"
+  },
+  {
+    "name": "new credentials keep the old backoff",
+    "file": "src/app.js",
+    "from": "if (this.credsKey(config) !== this.credsKey(previous)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "status not deduplicated",
+    "file": "src/app.js",
+    "from": "if (key === this.statusKey) return;",
+    "to": ""
+  },
+  {
+    "name": "controls accepted in a secret",
+    "file": "src/config.js",
+    "from": "!TOKEN_LIKE.test(text)",
+    "to": "false"
+  },
+  {
+    "name": "any redirect protocol",
+    "file": "src/app.js",
+    "from": "return url.protocol === 'https:' || url.protocol === 'http:';",
+    "to": "return true;"
+  },
+  {
+    "name": "getConfig not retried",
+    "file": "src/handlers.js",
+    "from": "timer = timers.setTimeout(() => tryStart(current), wait);",
+    "to": ""
+  },
+  {
+    "name": "stopped app still sends",
+    "file": "src/app.js",
+    "from": "    if (this.stopped) return Promise.reject(notSent(T.stopping));\n",
+    "to": ""
+  },
+  {
+    "name": "queued jobs kept at stop",
+    "file": "src/app.js",
+    "from": "for (const job of this.queue.splice(0)) job.reject(notSent(T.stopping));",
+    "to": ""
+  },
+  {
+    "name": "scene result success on unconfirmed",
+    "file": "src/app.js",
+    "from": "const wrap = (why) => (err.sent ? unconfirmed(why) : notSent(why));",
+    "to": "const wrap = (why) => notSent(why);"
+  },
+  {
+    "name": "PERMISSION_DENIED taken for a pause",
+    "file": "src/app.js",
+    "from": "    if (err.code === GRPC.PERMISSION_DENIED) {\n",
+    "to": "    if (err.code === GRPC.PERMISSION_DENIED) {\n      this.recordPause();\n"
+  }
+]
