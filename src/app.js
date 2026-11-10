@@ -54,6 +54,9 @@ export class UserError extends Error {
   }
 }
 
+// Printable ASCII, bounded: an authorization code or a refresh token.
+const REFRESH_TOKEN_SHAPE = /^[\x21-\x7e]{1,2048}$/;
+
 const notSent = (why) => new UserError(T.notSent(why));
 const unconfirmed = (why) => new UserError(T.unconfirmed(why));
 
@@ -86,12 +89,18 @@ export class AssistantApp {
     this.tokenRetry = { at: -Infinity, wait: 0 };
     this.processSalt = randomBytes(16).toString('hex');
     this.memRefusal = undefined; // { full, kind }
-    this.pause = undefined; // { until (mono), level }
+    // { until (mono), level, source: 'token' | 'assistant' }; the level is
+    // reset by a success of the Assistant only (a token renewal says nothing
+    // of its quota), and kept in /data across restarts.
+    this.pause = undefined;
+    this.pauseTimer = undefined;
     this.problem = undefined; // a status message {en, fr}, the last error
     this.data = undefined;
     this.storeState = undefined;
     this.loading = undefined;
+    this.reading = undefined; // the store.load() still running, whatever the bound
     this.storeTimer = undefined;
+    this.storeLogged = undefined;
     this.dirty = false;
     this.states = [];
     this.queue = [];
@@ -142,20 +151,34 @@ export class AssistantApp {
   stop() {
     this.stopped = true;
     this.timers.clearTimeout(this.storeTimer);
+    this.timers.clearTimeout(this.pauseTimer);
     for (const job of this.queue.splice(0)) job.reject(notSent(T.stopping));
   }
 
   // --- /data ------------------------------------------------------------------
 
-  /** One read at a time, bounded; unreadable: read again every TIMINGS.storeRetry. */
+  /**
+   * One read at a time, bounded; unreadable: read again every
+   * TIMINGS.storeRetry. A read that outlives its bound (a stuck disk) still
+   * counts: no other read starts before it ends, the timer only rearms.
+   */
   loadStore() {
     if (this.loading) return this.loading;
     this.loading = (async () => {
       let result;
       let timer;
-      try {
+      if (this.reading) {
+        result = { state: 'unreadable' };
+      } else {
+        const reading = Promise.resolve()
+          .then(() => this.store.load())
+          .catch(() => ({ state: 'unreadable' }));
+        this.reading = reading;
+        reading.finally(() => {
+          if (this.reading === reading) this.reading = undefined;
+        });
         result = await Promise.race([
-          this.store.load(),
+          reading,
           new Promise((resolve) => {
             timer = this.timers.setTimeout(
               () => resolve({ state: 'unreadable' }),
@@ -163,36 +186,37 @@ export class AssistantApp {
             );
           }),
         ]);
-      } catch {
-        result = { state: 'unreadable' };
-      } finally {
         this.timers.clearTimeout(timer);
       }
       if (this.stopped) return;
       if (result.state === 'unreadable') {
         this.storeState = 'unreadable';
         this.data ??= emptyData();
-        this.logger?.warn('/data unreadable: kept in memory, read again later');
+        if (this.storeLogged !== 'unreadable') {
+          this.storeLogged = 'unreadable';
+          this.logger?.warn('/data unreadable: kept in memory, read again later');
+        }
         this.timers.clearTimeout(this.storeTimer);
         this.storeTimer = this.timers.setTimeout(() => {
           this.loadStore().then(() => this.publishStatus());
         }, TIMINGS.storeRetry);
         return;
       }
-      const memoryPause = this.pause;
+      if (this.storeLogged === 'unreadable') this.logger?.info('/data readable again');
+      this.storeLogged = result.state;
       this.storeState = result.state;
       this.data = result.data;
       const mono = this.monotonic();
       const wall = this.now();
-      if (this.data.pause && this.data.pause.until > wall) {
-        const until = mono + (this.data.pause.until - wall);
+      const kept = this.data.pause;
+      if (kept && kept.until > wall) {
+        const until = mono + (kept.until - wall);
         if (!this.pause || until > this.pause.until) {
-          this.pause = { until, level: this.data.pause.level };
+          this.pause = { until, level: kept.level, source: kept.source };
         }
-      } else if (this.data.pause && !this.pause) {
-        this.pause = { until: mono, level: this.data.pause.level };
+      } else if (kept && !this.pause) {
+        this.pause = { until: mono, level: kept.level, source: kept.source };
       }
-      if (memoryPause && memoryPause.until > mono) this.dirty = true;
       if (this.memRefusal && this.config) {
         this.data.refused = {
           fp: fingerprint(this.data.salt, this.creds(this.config)),
@@ -201,6 +225,7 @@ export class AssistantApp {
         };
         this.dirty = true;
       }
+      this.schedulePauseEnd();
       if (this.dirty) this.persist();
     })().finally(() => {
       this.loading = undefined;
@@ -221,6 +246,7 @@ export class AssistantApp {
       this.data.pause = {
         until: Math.round(wall + Math.max(0, this.pause.until - mono)),
         level: this.pause.level,
+        source: this.pause.source,
       };
     } else {
       this.data.pause = null;
@@ -282,19 +308,56 @@ export class AssistantApp {
     return this.pause && this.pause.until > mono ? this.pause.until - mono : 0;
   }
 
-  recordPause(retryAfter) {
+  recordPause(source, retryAfter) {
     const level = this.pause ? Math.min(this.pause.level + 1, 20) : 0;
     const doubled = Math.min(TIMINGS.pauseMax, TIMINGS.pauseMin * 2 ** level);
     const ms = Math.min(TIMINGS.pauseMax, Math.max(doubled, retryAfter ?? 0));
     const mono = this.monotonic();
-    this.pause = { until: mono + ms, level };
+    this.pause = { until: mono + ms, level, source };
+    this.schedulePauseEnd();
     this.persist();
   }
 
+  /** A success of the Assistant: the pause and its level are over. */
   clearPause() {
     if (!this.pause) return;
     this.pause = undefined;
+    this.timers.clearTimeout(this.pauseTimer);
     this.persist();
+  }
+
+  /**
+   * A success of the token endpoint: ends a pause that endpoint asked for,
+   * keeps the level (only the Assistant tells about its own quota).
+   */
+  tokenSucceeded() {
+    const mono = this.monotonic();
+    if (this.pause?.source === 'token' && this.pause.until > mono) {
+      this.pause = { ...this.pause, until: mono };
+      this.timers.clearTimeout(this.pauseTimer);
+      this.persist();
+    }
+  }
+
+  /** The status is published again when the pause ends (its countdown would stay). */
+  schedulePauseEnd() {
+    this.timers.clearTimeout(this.pauseTimer);
+    const left = this.pausedFor(this.monotonic());
+    if (!left || this.stopped) return;
+    this.pauseTimer = this.timers.setTimeout(() => this.pauseEnded(), left + 10);
+  }
+
+  /** At the end of a pause: the token checked again if needed, then the status. */
+  async pauseEnded() {
+    if (this.stopped) return;
+    if (this.canAsk() && !this.accessValid()) {
+      try {
+        await this.getAccessToken();
+      } catch (err) {
+        this.logger?.warn('Access token not renewed', err?.message);
+      }
+    }
+    await this.publishStatus();
   }
 
   /** True when a request to Google may be made now. */
@@ -390,6 +453,7 @@ export class AssistantApp {
       throw this.tokenFailure(err);
     }
     if (key !== this.credsKey()) return { key };
+    let current = key;
     const expiresIn = Number(answer.expires_in);
     const life = Number.isFinite(expiresIn)
       ? Math.min(24 * 3600, Math.max(60, expiresIn)) * 1000
@@ -398,13 +462,22 @@ export class AssistantApp {
     this.access = { token: answer.access_token, expires: mono + life, key };
     this.tokenRetry = { at: -Infinity, wait: 0 };
     this.clearRefusal();
-    this.clearPause();
+    this.tokenSucceeded();
     this.problem = undefined;
-    if (typeof answer.refresh_token === 'string' && answer.refresh_token !== config.refreshToken) {
+    if (
+      typeof answer.refresh_token === 'string' &&
+      REFRESH_TOKEN_SHAPE.test(answer.refresh_token) &&
+      answer.refresh_token !== config.refreshToken
+    ) {
       // Google rotated the refresh token (rare): kept, or the next start fails.
-      await this.saveRefreshToken(answer.refresh_token).catch(() => {});
+      try {
+        await this.saveRefreshToken(answer.refresh_token);
+        current = this.credsKey();
+      } catch {
+        this.logger?.warn('Rotated refresh token not saved');
+      }
     }
-    return { key, token: answer.access_token };
+    return { key: current, token: answer.access_token };
   }
 
   /** A TokenError as the UserError to throw, with its effect (refusal, pause, problem). */
@@ -420,9 +493,9 @@ export class AssistantApp {
       return notSent(err.kind === 'grant' ? T.refusedGrant : T.refusedClient);
     }
     if (err instanceof TokenError && err.kind === 'busy') {
-      this.recordPause(err.retryAfter);
+      this.recordPause('token', err.retryAfter);
       this.publishStatus();
-      return notSent(T.quota);
+      return notSent(err.status === 429 ? T.quota : T.googleServer);
     }
     if (err instanceof TokenError && (err.kind === 'offline' || err.kind === 'timeout')) {
       this.problem = T.unreachable;
@@ -448,8 +521,11 @@ export class AssistantApp {
     const c = this.config;
     if (!c || c.problem === 'client') throw new UserError(T.missingClient);
     if (!validRedirect(redirectUri)) throw new UserError(T.badRedirect);
-    const { state, verifier, challenge } = createPkce();
     const mono = this.monotonic();
+    const paused = this.pausedFor(mono);
+    // Refused before the consent screen, not after it.
+    if (paused) throw new UserError(T.paused(paused));
+    const { state, verifier, challenge } = createPkce();
     this.states = this.states.filter((s) => s.expires > mono).slice(-(LIMITS.states - 1));
     this.states.push({
       state,
@@ -468,7 +544,7 @@ export class AssistantApp {
     if (index < 0) throw new UserError(T.badState);
     const [entry] = this.states.splice(index, 1);
     if (redirectUri !== entry.redirectUri) throw new UserError(T.badRedirect);
-    if (typeof code !== 'string' || !/^[\x21-\x7e]{1,2048}$/.test(code)) {
+    if (typeof code !== 'string' || !REFRESH_TOKEN_SHAPE.test(code)) {
       throw new UserError(T.codeRefused);
     }
     const c = this.config;
@@ -500,7 +576,7 @@ export class AssistantApp {
     }
     if (
       typeof answer.refresh_token !== 'string' ||
-      !/^[\x21-\x7e]{1,2048}$/.test(answer.refresh_token)
+      !REFRESH_TOKEN_SHAPE.test(answer.refresh_token)
     ) {
       throw new UserError(T.noRefreshToken);
     }
@@ -527,7 +603,7 @@ export class AssistantApp {
     };
     this.tokenRetry = { at: -Infinity, wait: 0 };
     this.clearRefusal();
-    this.clearPause();
+    this.tokenSucceeded();
     this.problem = undefined;
     await this.publishStatus();
   }
@@ -616,7 +692,8 @@ export class AssistantApp {
         } catch (err) {
           job.reject(err instanceof UserError ? err : notSent(T.googleError));
         }
-        await this.publishStatus();
+        // Not awaited: a slow Gladys API never eats the budget of the next one.
+        this.publishStatus();
       }
     } finally {
       this.busy = false;
@@ -725,7 +802,7 @@ export class AssistantApp {
   assistFailure(err) {
     const wrap = (why) => (err.sent ? unconfirmed(why) : notSent(why));
     if (err.code === GRPC.RESOURCE_EXHAUSTED) {
-      this.recordPause();
+      this.recordPause('assistant');
       return wrap(T.quota);
     }
     if (
@@ -733,7 +810,7 @@ export class AssistantApp {
       err.code === GRPC.INTERNAL ||
       (err.kind === 'http' && err.status >= 500)
     ) {
-      this.recordPause();
+      this.recordPause('assistant');
       return wrap(T.serverError);
     }
     if (err.code === GRPC.PERMISSION_DENIED) {

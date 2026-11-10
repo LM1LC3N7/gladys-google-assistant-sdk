@@ -223,8 +223,21 @@ export class AssistantClient {
 
         stream.on('trailers', (headers) => readStatus(headers));
 
+        // A stream refused before any processing (RST_STREAM REFUSED_STREAM,
+        // RFC 9113 §8.7, also how a GOAWAY closes the streams it did not
+        // take): nothing was done.
+        const refused = () => !headersSeen && stream.rstCode === h2.NGHTTP2_REFUSED_STREAM;
+        const lostOrRefused = () =>
+          refused()
+            ? new AssistError('Google Assistant refused the stream', 'lost', { sent: false })
+            : new AssistError('The connection to Google Assistant was lost', 'lost', { sent });
+
         stream.on('close', () => {
           if (done) return;
+          if (refused()) {
+            finish(lostOrRefused());
+            return;
+          }
           if (!headersSeen || grpcStatus === undefined || !Number.isInteger(grpcStatus)) {
             finish(
               new AssistError('The connection to Google Assistant was lost', 'lost', { sent }),
@@ -248,7 +261,7 @@ export class AssistantClient {
         });
 
         stream.on('error', () => {
-          finish(new AssistError('The connection to Google Assistant was lost', 'lost', { sent }));
+          finish(lostOrRefused());
         });
 
         // From here on, the request may reach Google.

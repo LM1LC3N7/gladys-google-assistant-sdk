@@ -215,3 +215,20 @@ test('grpc-message: decoded, controls removed, bounded', () => {
   assert.ok(decodeGrpcMessage('x'.repeat(5000)).length <= 200);
   assert.equal(decodeGrpcMessage(undefined), '');
 });
+
+test('every call closes its HTTP/2 session (none left open on the server)', async (t) => {
+  const { google, call } = await setup(t);
+  for (const mode of ['ok', 'denied', 'notgrpc', 'cut', 'reset']) {
+    google.mode = mode;
+    await call().catch(() => {});
+  }
+  await until(() => google.sessions() === 0, 3000);
+});
+
+test('a stream refused before processing (REFUSED_STREAM): nothing sent', async (t) => {
+  const { google, call } = await setup(t);
+  google.mode = 'refused';
+  const err = await failure(call());
+  assert.equal(err.kind, 'lost');
+  assert.equal(err.sent, false);
+});

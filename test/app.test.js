@@ -328,7 +328,7 @@ test('token 503: pause of 60 s kept in /data, then doubled; requests resume afte
   assert.equal(ctx.token.count(), 1);
   await ctx.step(60_001);
   ack = await broadcast(ctx.gladys, { message: 'hello' });
-  assert.match(ack.error, /^Nothing sent: Google asked to slow down \(quota\)/);
+  assert.equal(ack.error, 'Nothing sent: Google had a server error.');
   assert.equal(ctx.token.count(), 2);
   assert.equal(ctx.store.data.pause.level, 1);
   assert.ok(Math.abs(ctx.store.data.pause.until - ctx.clock.now - 120_000) < 1000);

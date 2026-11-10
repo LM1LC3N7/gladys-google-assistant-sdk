@@ -65,6 +65,7 @@ const copy = (dir) =>
   cpSync(REPO, dir, {
     recursive: true,
     filter: (src) => basename(src) !== '.git',
+    verbatimSymlinks: true,
   });
 
 let survivors = 0;

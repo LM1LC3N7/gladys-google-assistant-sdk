@@ -190,7 +190,12 @@ test('sanitize: unknown keys dropped, fingerprints checked, impossible pauses re
   assert.deepEqual(sanitize({ salt, pause: { until: now + 60_000, level: 2 } }, now).pause, {
     until: now + 60_000,
     level: 2,
+    source: 'assistant',
   });
+  assert.equal(
+    sanitize({ salt, pause: { until: now + 60_000, level: 2, source: 'token' } }, now).pause.source,
+    'token',
+  );
   assert.equal(sanitize({ salt, pause: { until: now + 7 * 3600_000, level: 2 } }, now).pause, null);
   assert.equal(sanitize({ salt, pause: { until: 'x', level: 2 } }, now).pause, null);
   assert.notEqual(sanitize({ salt: 'short' }, now).salt, 'short');

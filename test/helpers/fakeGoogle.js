@@ -22,6 +22,22 @@ const cert = readFileSync(new URL('../fixtures/device.crt', import.meta.url));
 const key = readFileSync(new URL('../fixtures/device.key', import.meta.url));
 export const TLS = { ca: cert, checkServerIdentity: () => undefined };
 
+/**
+ * Closes a server: its connections destroyed first, then a bounded wait (a
+ * test fails, never hangs, even under a mutant that leaks a connection).
+ */
+function boundedClose(server, destroyAll, ms = 3000) {
+  destroyAll();
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`server not closed in ${ms} ms`)), ms);
+    timer.unref();
+    server.close(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
 /** The token endpoint. `fake.mode` picks the answer; `fake.reply(req, form, res)` overrides it. */
 export async function startTokenServer() {
   const fake = {
@@ -97,11 +113,7 @@ export async function startTokenServer() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   fake.url = `http://127.0.0.1:${server.address().port}/token`;
   fake.count = (grant) => fake.requests.filter((r) => !grant || r.form.grant_type === grant).length;
-  fake.close = () =>
-    new Promise((resolve) => {
-      for (const s of sockets) s.destroy();
-      server.close(() => resolve());
-    });
+  fake.close = () => boundedClose(server, () => sockets.forEach((s) => s.destroy()));
   return fake;
 }
 
@@ -296,6 +308,8 @@ export async function startAssistantServer() {
           stream.respond({ ':status': 200, 'content-type': 'application/grpc' });
           stream.write(frame(responseMessage()).subarray(0, 7));
           return stream.close(h2.NGHTTP2_INTERNAL_ERROR);
+        case 'refused':
+          return stream.close(h2.NGHTTP2_REFUSED_STREAM);
         case 'reset':
           return stream.close(h2.NGHTTP2_INTERNAL_ERROR);
         case 'silent':
@@ -308,10 +322,7 @@ export async function startAssistantServer() {
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
   fake.origin = `https://127.0.0.1:${server.address().port}`;
   fake.texts = () => fake.calls.map((c) => c.request.text);
-  fake.close = () =>
-    new Promise((resolve) => {
-      for (const s of sessions) s.destroy();
-      server.close(() => resolve());
-    });
+  fake.sessions = () => sessions.size;
+  fake.close = () => boundedClose(server, () => sessions.forEach((s) => s.destroy()));
   return fake;
 }

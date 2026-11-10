@@ -33,7 +33,11 @@
   reported ("did not accept a fresh access token"), never a refusal of the refresh token.
 - Pauses: `RESOURCE_EXHAUSTED`, HTTP 429, `UNAVAILABLE`, `INTERNAL`, 5xx (Assistant and token
   endpoint): every request to Google paused 60 s doubled up to 6 h (or a longer `Retry-After` of the token endpoint, read
-  against the answer's `Date`), kept in `/data`, a pause ending beyond 6 h from now is dropped.
+  against the answer's `Date`), kept in `/data` with its level and source, a pause ending beyond 6 h from now is dropped. The
+  level is reset by a success of the Assistant only (review r1, I1); a token success ends a pause the
+  token endpoint set, keeping the level. A timer republishes the status at the end of a pause.
+- `/data` read one at a time even past its 2 s bound (review r1, I2): a stuck read blocks any new one,
+  the retry timer only rearms.
 - Sent or not: "Nothing sent" when the request did not leave or Google said it did not run it (gRPC 3,
   5, 7, 8, 9, 12, 16, HTTP 429); otherwise "Sent, without confirmation". "Accepted" only on gRPC OK.
 - Bounds: message 500 characters and room 60 (one line, controls removed, never echoed back), answer

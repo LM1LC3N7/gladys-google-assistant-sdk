@@ -165,9 +165,23 @@ test('a refused code is not a refusal of the account; invalid_client is reported
   assert.match(statuses(ctx.gladys).at(-1)[1], /refused the client ID/);
 });
 
-test('Connect during a pause: refused without asking Google', async (t) => {
+test('Connect during a pause: refused at the authorization URL, before the consent screen', async (t) => {
   const ctx = await setup(t, { token: '503' });
+  const ack = await within(
+    ctx.gladys.fake.oauthAuthorizeUrl('google_account', REDIRECT),
+    3000,
+    'url',
+  );
+  assert.equal(ack.success, false);
+  assert.match(ack.error, /slow down/);
+  assert.equal(ctx.app.states.length, 0);
+  assert.equal(ctx.token.count('authorization_code'), 0);
+});
+
+test('a pause that starts between Connect and the callback: refused without asking Google', async (t) => {
+  const ctx = await setup(t);
   const { params } = await authorize(ctx.gladys);
+  ctx.app.recordPause('assistant');
   const ack = await callback(ctx.gladys, { code: 'c', state: params.state, redirectUri: REDIRECT });
   assert.match(ack.error, /slow down/);
   assert.equal(ctx.token.count('authorization_code'), 0);

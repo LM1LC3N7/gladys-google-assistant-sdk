@@ -128,6 +128,10 @@ export const T = {
     en: 'Google asked to slow down (quota).',
     fr: 'Google a demandé de ralentir (quota).',
   },
+  googleServer: {
+    en: 'Google had a server error.',
+    fr: 'Google a eu une erreur de serveur.',
+  },
   serverError: {
     en: 'Google Assistant had an error.',
     fr: 'l’Assistant Google a eu une erreur.',

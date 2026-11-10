@@ -8,7 +8,8 @@
 //   first success; a new token from Connect always lifts it, changed client
 //   credentials have 255 chances in 256 to look new;
 // - `pause`: the end of a pause asked by Google (429 or 5xx), on the wall
-//   clock, with its level (the pause doubles each time).
+//   clock, with its level (the pause doubles each time; only a success of
+//   the Assistant resets it) and its source (token endpoint or Assistant).
 // The tokens themselves live in the Gladys configuration (off-schema keys),
 // never here.
 //
@@ -55,12 +56,13 @@ export function sanitize(data, now = Date.now()) {
   }
   const pause = data.pause;
   if (isObject(pause) && Number.isFinite(pause.until) && Number.isInteger(pause.level)) {
+    const source = pause.source === 'token' ? 'token' : 'assistant';
     // A pause ending beyond its own maximum from now is a wrong date: dropped.
     if (pause.until > now && pause.until - now <= TIMINGS.pauseMax) {
-      base.pause = { until: pause.until, level: Math.min(Math.max(pause.level, 0), 20) };
+      base.pause = { until: pause.until, level: Math.min(Math.max(pause.level, 0), 20), source };
     } else if (pause.until <= now && pause.until > now - TIMINGS.pauseMax) {
       // Ended: the level is kept so a new error still doubles it.
-      base.pause = { until: pause.until, level: Math.min(Math.max(pause.level, 0), 20) };
+      base.pause = { until: pause.until, level: Math.min(Math.max(pause.level, 0), 20), source };
     }
   }
   return base;

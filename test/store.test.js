@@ -6,7 +6,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { constants, openSync, closeSync } from 'node:fs';
+import { mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FileStore, emptyData } from '../src/store.js';
@@ -49,9 +50,22 @@ test('a FIFO in place of the file: refused at once, never waited on', async (t) 
     t.skip('mkfifo not available');
     return;
   }
-  const started = Date.now();
-  assert.equal((await store.load()).state, 'unreadable');
-  assert.ok(Date.now() - started < 1500);
+  // Under a mutant that opens the FIFO blocking, a writer wakes the open up
+  // (before the directory is removed): the test fails, the process never hangs.
+  const wake = () => {
+    try {
+      closeSync(openSync(store.path, constants.O_RDWR | constants.O_NONBLOCK));
+    } catch {
+      // gone already
+    }
+  };
+  try {
+    const started = Date.now();
+    assert.equal((await store.load()).state, 'unreadable');
+    assert.ok(Date.now() - started < 1500);
+  } finally {
+    wake();
+  }
 });
 
 test('writes one at a time, the latest one wins', async (t) => {
@@ -69,4 +83,13 @@ test('a directory that cannot be created: save says false', async (t) => {
   await writeFile(join(path, 'file'), 'x');
   const store = new FileStore({ dir: join(path, 'file', 'sub'), now: () => NOW });
   assert.equal(await store.save(emptyData()), false);
+});
+
+test('a symbolic link in place of the file: unreadable, never followed', async (t) => {
+  const path = await dir(t);
+  const target = join(path, 'elsewhere.json');
+  await writeFile(target, JSON.stringify(emptyData()));
+  const store = new FileStore({ dir: path, now: () => NOW });
+  await symlink(target, store.path);
+  assert.equal((await store.load()).state, 'unreadable');
 });

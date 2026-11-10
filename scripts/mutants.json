@@ -188,8 +188,8 @@
   {
     "name": "refusal not cleared by a renewal",
     "file": "src/app.js",
-    "from": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.clearRefusal();\n    this.clearPause();\n    this.problem = undefined;\n    if (typeof",
-    "to": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.clearPause();\n    this.problem = undefined;\n    if (typeof"
+    "from": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.clearRefusal();\n    this.tokenSucceeded();\n    this.problem = undefined;\n    if (\n",
+    "to": "    this.tokenRetry = { at: -Infinity, wait: 0 };\n    this.tokenSucceeded();\n    this.problem = undefined;\n    if (\n"
   },
   {
     "name": "unreadable /data overwritten",
@@ -286,5 +286,131 @@
     "file": "src/app.js",
     "from": "    if (err.code === GRPC.PERMISSION_DENIED) {\n",
     "to": "    if (err.code === GRPC.PERMISSION_DENIED) {\n      this.recordPause();\n"
+  },
+  {
+    "name": "r1 I1: a token renewal resets the pause",
+    "file": "src/app.js",
+    "from": "    this.clearRefusal();\n    this.tokenSucceeded();\n    this.problem = undefined;\n    if (\n",
+    "to": "    this.clearRefusal();\n    this.clearPause();\n    this.problem = undefined;\n    if (\n"
+  },
+  {
+    "name": "r1 I1: a token success ends an Assistant pause",
+    "file": "src/app.js",
+    "from": "if (this.pause?.source === 'token' && this.pause.until > mono) {",
+    "to": "if (this.pause && this.pause.until > mono) {"
+  },
+  {
+    "name": "r1 I2: a new read while one is stuck",
+    "file": "src/app.js",
+    "from": "      if (this.reading) {",
+    "to": "      if (false) {"
+  },
+  {
+    "name": "r1 I3: old renewal failure applied to new credentials",
+    "file": "src/app.js",
+    "from": "      if (key !== this.credsKey()) throw notSent(T.notReady);\n",
+    "to": ""
+  },
+  {
+    "name": "r1 I3: old renewal success overwrites Connect",
+    "file": "src/app.js",
+    "from": "    if (key !== this.credsKey()) return { key };\n",
+    "to": ""
+  },
+  {
+    "name": "r1 I3: client change during authorization ignored",
+    "file": "src/app.js",
+    "from": "if (c.clientId !== entry.clientId) throw new UserError(T.clientChanged);",
+    "to": ""
+  },
+  {
+    "name": "r1 I3: code shape not checked",
+    "file": "src/app.js",
+    "from": "if (typeof code !== 'string' || !REFRESH_TOKEN_SHAPE.test(code)) {",
+    "to": "if (false) {"
+  },
+  {
+    "name": "r1 I3: token redirects followed",
+    "file": "src/oauth.js",
+    "from": "        redirect: 'error',\n",
+    "to": ""
+  },
+  {
+    "name": "r1 I3: stopped not checked after the spacing",
+    "file": "src/app.js",
+    "from": "    await this.spacing(job);\n    if (this.stopped) throw notSent(T.stopping);\n",
+    "to": "    await this.spacing(job);\n"
+  },
+  {
+    "name": "r1 I3/I4: symbolic link followed",
+    "file": "src/store.js",
+    "from": " | (constants.O_NOFOLLOW ?? 0)",
+    "to": ""
+  },
+  {
+    "name": "r1 I4: FIFO opened blocking",
+    "file": "src/store.js",
+    "from": "constants.O_RDONLY | constants.O_NONBLOCK",
+    "to": "constants.O_RDONLY"
+  },
+  {
+    "name": "r1 I4: HTTP/2 session leaked",
+    "file": "src/assistant.js",
+    "from": "        session?.destroy();\n",
+    "to": ""
+  },
+  {
+    "name": "r1 M1: rotated token loses the broadcast",
+    "file": "src/app.js",
+    "from": "        current = this.credsKey();\n",
+    "to": ""
+  },
+  {
+    "name": "r1 M1: rotated token shape not checked",
+    "file": "src/app.js",
+    "from": "      REFRESH_TOKEN_SHAPE.test(answer.refresh_token) &&\n",
+    "to": ""
+  },
+  {
+    "name": "r1 M2: no status at the end of the pause",
+    "file": "src/app.js",
+    "from": "this.pauseTimer = this.timers.setTimeout(() => this.pauseEnded(), left + 10);",
+    "to": ""
+  },
+  {
+    "name": "r1 M3: 503 said quota",
+    "file": "src/app.js",
+    "from": "err.status === 429 ? T.quota : T.googleServer",
+    "to": "T.quota"
+  },
+  {
+    "name": "r1 M4: refused stream said sent",
+    "file": "src/assistant.js",
+    "from": "!headersSeen && stream.rstCode === h2.NGHTTP2_REFUSED_STREAM",
+    "to": "false"
+  },
+  {
+    "name": "r1 M5: drain awaits the status",
+    "file": "src/app.js",
+    "from": "        // Not awaited: a slow Gladys API never eats the budget of the next one.\n        this.publishStatus();",
+    "to": "        await this.publishStatus();"
+  },
+  {
+    "name": "r1 M6: Connect allowed during a pause",
+    "file": "src/app.js",
+    "from": "    // Refused before the consent screen, not after it.\n    if (paused) throw new UserError(T.paused(paused));\n",
+    "to": "    // Refused before the consent screen, not after it.\n"
+  },
+  {
+    "name": "r1 M7: warning at every retry",
+    "file": "src/app.js",
+    "from": "if (this.storeLogged !== 'unreadable') {",
+    "to": "if (true) {"
+  },
+  {
+    "name": "r1 I3: pause and refusal from the unreadable time not written",
+    "file": "src/app.js",
+    "from": "    if (this.storeState === 'unreadable' || this.storeState === undefined) {\n      this.dirty = true;\n",
+    "to": "    if (this.storeState === 'unreadable' || this.storeState === undefined) {\n"
   }
 ]
