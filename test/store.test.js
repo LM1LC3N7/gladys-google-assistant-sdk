@@ -93,3 +93,50 @@ test('a symbolic link in place of the file: unreadable, never followed', async (
   await symlink(target, store.path);
   assert.equal((await store.load()).state, 'unreadable');
 });
+
+test('a disk that never answers: one open only, however many loads', async (t) => {
+  const path = await dir(t);
+  let opens = 0;
+  const store = new FileStore({
+    dir: path,
+    now: () => NOW,
+    openFile: () => {
+      opens += 1;
+      return new Promise(() => {}); // stuck in the kernel
+    },
+  });
+  const started = Date.now();
+  for (let i = 0; i < 10; i += 1) assert.equal((await store.load()).state, 'unreadable');
+  assert.equal(opens, 1);
+  assert.ok(Date.now() - started < 4000, 'only the first load waits for its bound');
+});
+
+test('a read that ends late frees the next one, and its handle is closed', async (t) => {
+  const path = await dir(t);
+  let release;
+  let closed = 0;
+  let opens = 0;
+  const store = new FileStore({
+    dir: path,
+    now: () => NOW,
+    openFile: async () => {
+      opens += 1;
+      if (opens === 1) await new Promise((resolve) => (release = resolve));
+      return {
+        stat: async () => ({ isFile: () => true, size: 2 }),
+        read: async () => ({ bytesRead: 0 }),
+        close: async () => {
+          closed += 1;
+        },
+      };
+    },
+  });
+  assert.equal((await store.load()).state, 'unreadable');
+  assert.equal((await store.load()).state, 'unreadable');
+  assert.equal(opens, 1);
+  release();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(closed, 1);
+  await store.load();
+  assert.equal(opens, 2);
+});

@@ -84,7 +84,9 @@ compte par Gladys.
   Google s’arrêtent 60 s, puis 2, 4… minutes jusqu’à 6 h si cela recommence (ou le délai plus long que
   donne Google), pause conservée après un redémarrage. Le statut indique la reprise et se met à jour à la
   fin de la pause. Seul un succès de l’Assistant remet le doublement à zéro (un renouvellement de jeton
-  ne dit rien de son quota) ; Connecter est refusé pendant une pause.
+  ne dit rien de son quota) ; Connecter est refusé pendant une pause. À la fin d’une pause, si le jeton d’accès a expiré,
+  l’intégration le renouvelle d’elle-même une fois (pour afficher un statut juste) : une requête,
+  espacée par le doublement.
 - **Google refuse l’accès** (révoqué, mot de passe changé, application encore « En test » depuis plus
   de 7 jours) ou **refuse l’ID client ou le code secret** : l’intégration cesse de demander et le statut
   l’indique, y compris après un redémarrage. C’est levé par **Connecter** (une nouvelle autorisation) ou

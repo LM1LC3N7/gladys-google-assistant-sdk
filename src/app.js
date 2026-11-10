@@ -350,6 +350,11 @@ export class AssistantApp {
   /** At the end of a pause: the token checked again if needed, then the status. */
   async pauseEnded() {
     if (this.stopped) return;
+    // A timer may fire a little early: the pause still runs, rearmed.
+    if (this.pausedFor(this.monotonic()) > 0) {
+      this.schedulePauseEnd();
+      return;
+    }
     if (this.canAsk() && !this.accessValid()) {
       try {
         await this.getAccessToken();
@@ -398,8 +403,8 @@ export class AssistantApp {
   async publishStatus() {
     if (this.stopped) return;
     const [connected, message] = this.status();
-    // The pause message carries a countdown: its key ignores the minutes.
-    const key = `${connected}:${message === T.connected ? 'ok' : message.en.replace(/\d+/g, '#')}`;
+    // The exact text: a pause that follows another one shows its own countdown.
+    const key = `${connected}:${message.en}`;
     if (key === this.statusKey) return;
     this.statusKey = key;
     try {

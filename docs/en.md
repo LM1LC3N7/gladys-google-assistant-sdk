@@ -78,7 +78,8 @@ account per Gladys.
   60 s, then 2, 4… minutes up to 6 h if it happens again (or the longer delay Google gives), kept across a
   restart. The status shows when requests resume, and is updated when the pause ends. Only a
   success of the Assistant resets the doubling (a token renewal says nothing about its quota); Connect
-  is refused during a pause.
+  is refused during a pause. At the end of a pause, if the access token has expired, the integration
+  renews it once by itself (to show a true status): one request, spaced by the doubling.
 - **Google refuses the access** (revoked, password changed, app still "In testing" for more than 7
   days) or **refuses the client ID or secret**: the integration stops asking and the status says so.
   This holds after a restart. It is lifted by **Connect** (a new authorization) or by a changed client

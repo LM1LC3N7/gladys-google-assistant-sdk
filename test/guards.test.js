@@ -321,3 +321,45 @@ test('a Connect that ends during a pause of the Assistant: the pause stays', asy
     'the Assistant pause is not lifted by Connect',
   );
 });
+
+test('a pause read from /data at start: the status is republished at its end', async (t) => {
+  const store = new MemoryStore(
+    {
+      salt: 'a'.repeat(32),
+      refused: null,
+      pause: { until: NOW + 60_000, level: 0, source: 'assistant' },
+    },
+    { now: () => NOW },
+  );
+  const ctx = await setup(t, { store });
+  assert.match(statuses(ctx.gladys).at(-1)[1], /slow down/);
+  assert.equal(ctx.token.count(), 0);
+  await ctx.step(60_020);
+  await until(() => statuses(ctx.gladys).at(-1)?.[0] === true);
+  assert.equal(ctx.token.count(), 1, 'the token checked at the end of the pause');
+});
+
+test('the end-of-pause timer firing early is rearmed; stop() clears it', async (t) => {
+  const ctx = await setup(t, { assistant: 'quota' });
+  await broadcast(ctx.gladys, { message: 'a' });
+  const before = statuses(ctx.gladys).length;
+  // As if the timer had fired before the end: consumed, then its callback runs.
+  ctx.pending.delete(ctx.app.pauseTimer);
+  await ctx.app.pauseEnded();
+  assert.ok(ctx.pending.has(ctx.app.pauseTimer), 'rearmed');
+  assert.equal(statuses(ctx.gladys).length, before);
+  await ctx.step(60_020);
+  await until(() => statuses(ctx.gladys).at(-1)?.[0] === true);
+  ctx.app.recordPause('assistant');
+  const timer = ctx.app.pauseTimer;
+  assert.ok(ctx.pending.has(timer));
+  ctx.app.stop();
+  assert.ok(!ctx.pending.has(timer));
+});
+
+test('pauses that follow each other: each countdown is published', async (t) => {
+  const ctx = await setup(t, { token: '503' });
+  assert.match(statuses(ctx.gladys).at(-1)[1], /about 1 min/);
+  await ctx.step(60_020); // the end of the pause renews the token: 503 again
+  await until(() => /about 2 min/.test(statuses(ctx.gladys).at(-1)?.[1] ?? ''));
+});

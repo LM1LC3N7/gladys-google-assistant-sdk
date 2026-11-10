@@ -96,12 +96,46 @@ export class FileStore {
     this.now = now;
     this.chain = Promise.resolve();
     this.pending = undefined;
+    this.inflight = undefined;
   }
 
-  /** -> { data, state: 'ok' | 'empty' | 'unreadable' } within the bound. */
+  /**
+   * -> { data, state: 'ok' | 'empty' | 'unreadable' } within the bound. The
+   * disk operation itself is followed, not only the bound: while a previous
+   * open or read is still running (a stuck disk keeps a libuv thread), no new
+   * one starts and the answer is "unreadable" at once (review r2, I2).
+   */
   async load() {
+    if (this.inflight) return { data: emptyData(), state: 'unreadable' };
+    const operation = this.readText();
+    this.inflight = operation;
+    operation.then(
+      () => this.release(operation),
+      () => this.release(operation),
+    );
+    try {
+      const text = await withTimeout(operation, TIMINGS.storeTimeout);
+      let json;
+      try {
+        json = JSON.parse(text);
+      } catch {
+        return { data: emptyData(), state: 'unreadable' };
+      }
+      return { data: sanitize(json, this.now()), state: 'ok' };
+    } catch (err) {
+      if (err?.code === 'ENOENT') return { data: emptyData(), state: 'empty' };
+      return { data: emptyData(), state: 'unreadable' };
+    }
+  }
+
+  release(operation) {
+    if (this.inflight === operation) this.inflight = undefined;
+  }
+
+  /** The text of the file; the handle is closed when the operation really ends. */
+  async readText() {
     let handle;
-    const read = async () => {
+    try {
       // O_NONBLOCK: opening a FIFO never waits for a writer.
       handle = await this.openFile(
         this.path,
@@ -131,21 +165,8 @@ export class FileStore {
       }
       if (bytesRead > LIMITS.storeBytes) throw new Error('too large');
       return buffer.subarray(0, bytesRead).toString('utf8');
-    };
-    try {
-      const text = await withTimeout(read(), TIMINGS.storeTimeout);
-      let json;
-      try {
-        json = JSON.parse(text);
-      } catch {
-        return { data: emptyData(), state: 'unreadable' };
-      }
-      return { data: sanitize(json, this.now()), state: 'ok' };
-    } catch (err) {
-      if (err?.code === 'ENOENT') return { data: emptyData(), state: 'empty' };
-      return { data: emptyData(), state: 'unreadable' };
     } finally {
-      handle?.close().catch(() => {});
+      await handle?.close().catch(() => {});
     }
   }
 

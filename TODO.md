@@ -35,9 +35,11 @@
   endpoint): every request to Google paused 60 s doubled up to 6 h (or a longer `Retry-After` of the token endpoint, read
   against the answer's `Date`), kept in `/data` with its level and source, a pause ending beyond 6 h from now is dropped. The
   level is reset by a success of the Assistant only (review r1, I1); a token success ends a pause the
-  token endpoint set, keeping the level. A timer republishes the status at the end of a pause.
+  token endpoint set, keeping the level. A timer republishes the status at the end of a pause (rearmed if it fires early), after one renewal
+  of an expired access token (review r2, N2, N4).
 - `/data` read one at a time even past its 2 s bound (review r1, I2): a stuck read blocks any new one,
-  the retry timer only rearms.
+  the retry timer only rearms. `FileStore` itself follows the disk operation, not its 2 s bound: no new
+  open while one is still running (review r2, I2).
 - Sent or not: "Nothing sent" when the request did not leave or Google said it did not run it (gRPC 3,
   5, 7, 8, 9, 12, 16, HTTP 429); otherwise "Sent, without confirmation". "Accepted" only on gRPC OK.
 - Bounds: message 500 characters and room 60 (one line, controls removed, never echoed back), answer

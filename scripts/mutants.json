@@ -412,5 +412,41 @@
     "file": "src/app.js",
     "from": "    if (this.storeState === 'unreadable' || this.storeState === undefined) {\n      this.dirty = true;\n",
     "to": "    if (this.storeState === 'unreadable' || this.storeState === undefined) {\n"
+  },
+  {
+    "name": "r2 I2: a new open while one is stuck",
+    "file": "src/store.js",
+    "from": "    if (this.inflight) return { data: emptyData(), state: 'unreadable' };\n",
+    "to": ""
+  },
+  {
+    "name": "r2 I2: the operation released at its bound",
+    "file": "src/store.js",
+    "from": "    operation.then(\n      () => this.release(operation),\n      () => this.release(operation),\n    );\n",
+    "to": "    operation.catch(() => {});\n    setTimeout(() => this.release(operation), TIMINGS.storeTimeout);\n"
+  },
+  {
+    "name": "r2 N1: countdown hidden by the key",
+    "file": "src/app.js",
+    "from": "const key = `${connected}:${message.en}`;",
+    "to": "const key = `${connected}:${message.en.replace(/\\d+/g, '#')}`;"
+  },
+  {
+    "name": "r2 N2: early timer not rearmed",
+    "file": "src/app.js",
+    "from": "    if (this.pausedFor(this.monotonic()) > 0) {\n      this.schedulePauseEnd();\n      return;\n    }",
+    "to": "    if (this.pausedFor(this.monotonic()) > 0) {\n      return;\n    }"
+  },
+  {
+    "name": "r2 N3: pause from /data without end timer",
+    "file": "src/app.js",
+    "from": "      this.schedulePauseEnd();\n      if (this.dirty) this.persist();",
+    "to": "      if (this.dirty) this.persist();"
+  },
+  {
+    "name": "r2 N3: pause timer kept at stop",
+    "file": "src/app.js",
+    "from": "    this.timers.clearTimeout(this.pauseTimer);\n    for (const job",
+    "to": "    for (const job"
   }
 ]
