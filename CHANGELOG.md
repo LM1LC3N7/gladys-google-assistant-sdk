@@ -10,6 +10,8 @@ the notes of the version's GitHub Release.
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-11-10
+
 ### Added
 
 - First version: broadcast a message on the Google speakers (every speaker or
@@ -21,3 +23,6 @@ the notes of the version's GitHub Release.
   Google kept in `/data`; a refused access or OAuth client never asked again
   by itself (a salted 8-bit fingerprint in `/data`), lifted by Connect or new
   client credentials.
+
+[Unreleased]: https://github.com/LM1LC3N7/gladys-google-assistant-sdk/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/LM1LC3N7/gladys-google-assistant-sdk/releases/tag/v0.1.1

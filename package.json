@@ -1,6 +1,6 @@
 {
   "name": "gladys-google-assistant-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Unofficial Google Assistant SDK integration for Gladys Assistant: broadcast a message on the Google speakers from a scene, with the user's own Google Cloud project.",
   "type": "module",
