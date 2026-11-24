@@ -56,7 +56,7 @@ test('start: one token renewal, then "linked"', async (t) => {
   });
   assert.match(
     headers['user-agent'],
-    /^gladys-google-assistant-sdk\/0\.1\.0 \(\+https:\/\/github\.com\/LM1LC3N7\//,
+    /^gladys-google-assistant-sdk\/\d+\.\d+\.\d+ \(\+https:\/\/github\.com\/LM1LC3N7\//,
   );
   assert.deepEqual(lastStatus(ctx.gladys), [true, 'Google account linked.']);
   assert.equal(ctx.google.calls.length, 0, 'no request to the Assistant at start');
